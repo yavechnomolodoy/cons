@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎯 Интерактивный прямоугольник</title>
+    <title>🎯 Точный редактор прямоугольника</title>
     <style>
         * {
             margin: 0;
@@ -47,6 +47,11 @@
         .rectangle.moving {
             cursor: grabbing;
             opacity: 0.9;
+        }
+
+        .rectangle.selected {
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.6);
+            border: 3px solid #ff4757;
         }
 
         .resize-handle {
@@ -94,56 +99,111 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             font-size: 14px;
             z-index: 1000;
-            min-width: 280px;
+            min-width: 320px;
         }
 
-        .info-item {
-            margin: 8px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .panel-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
         }
 
-        .info-label {
+        .panel-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .section-title {
             font-weight: bold;
             color: #333;
-            min-width: 80px;
+            margin-bottom: 10px;
+            font-size: 16px;
         }
 
-        .info-value {
-            color: #667eea;
-            font-weight: bold;
-            min-width: 60px;
-            text-align: right;
-        }
-
-        .input-control {
-            display: flex;
-            gap: 5px;
+        .input-group {
+            display: grid;
+            grid-template-columns: 80px 1fr 60px;
+            gap: 8px;
             align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .input-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 13px;
         }
 
         .size-input {
-            width: 70px;
-            padding: 4px 8px;
+            width: 100%;
+            padding: 6px 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 13px;
             text-align: center;
         }
 
-        .apply-btn {
+        .size-input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        .unit {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .btn {
             background: #667eea;
             color: white;
             border: none;
-            padding: 4px 8px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5a67d8;
+        }
+
+        .btn.apply-all {
+            background: #ff6b6b;
+            grid-column: 1 / -1;
+        }
+
+        .btn.apply-all:hover {
+            background: #ff4757;
+        }
+
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .preset-btn {
+            background: #51cf66;
+            color: white;
+            border: none;
+            padding: 6px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 11px;
         }
 
-        .apply-btn:hover {
-            background: #5a67d8;
+        .preset-btn:hover {
+            background: #40c057;
         }
 
         .controls-panel {
@@ -190,6 +250,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            margin-bottom: 10px;
         }
 
         .step-input {
@@ -201,17 +262,16 @@
             text-align: center;
         }
 
-        .instructions {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-align: center;
+        .coordinates-display {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
             font-size: 12px;
-            color: #666;
+            font-family: 'Courier New', monospace;
         }
 
         .grid-overlay {
@@ -227,49 +287,126 @@
             pointer-events: none;
             z-index: 1;
         }
+
+        .ruler {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            z-index: 2;
+        }
+
+        .ruler.horizontal {
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .ruler.vertical {
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 100%;
+            border-right: 1px solid #ccc;
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
     <div class="workspace" id="workspace">
         <div class="grid-overlay"></div>
+        <div class="ruler horizontal"></div>
+        <div class="ruler vertical"></div>
         <!-- Прямоугольник будет создан здесь -->
     </div>
 
     <div class="info-panel">
-        <div class="info-item">
-            <span class="info-label">Позиция X:</span>
-            <span class="info-value" id="posX">200</span>
-            <div class="input-control">
-                <input type="number" class="size-input" id="inputX" value="200" min="0">
-                <button class="apply-btn" onclick="applyPosition()">Применить</button>
+        <div class="panel-section">
+            <div class="section-title">📐 Точные размеры</div>
+            
+            <div class="input-group">
+                <span class="input-label">Позиция X:</span>
+                <input type="number" class="size-input" id="inputX" value="200" min="0" max="1000">
+                <span class="unit">px</span>
+            </div>
+            
+            <div class="input-group">
+                <span class="input-label">Позиция Y:</span>
+                <input type="number" class="size-input" id="inputY" value="150" min="0" max="1000">
+                <span class="unit">px</span>
+            </div>
+            
+            <div class="input-group">
+                <span class="input-label">Ширина:</span>
+                <input type="number" class="size-input" id="inputWidth" value="300" min="50" max="1200">
+                <span class="unit">px</span>
+            </div>
+            
+            <div class="input-group">
+                <span class="input-label">Высота:</span>
+                <input type="number" class="size-input" id="inputHeight" value="200" min="50" max="800">
+                <span class="unit">px</span>
+            </div>
+
+            <div class="button-group">
+                <button class="btn" onclick="applyPosition()">Применить позицию</button>
+                <button class="btn" onclick="applySize()">Применить размер</button>
+                <button class="btn apply-all" onclick="applyAll()">Применить всё</button>
             </div>
         </div>
-        <div class="info-item">
-            <span class="info-label">Позиция Y:</span>
-            <span class="info-value" id="posY">150</span>
-            <div class="input-control">
-                <input type="number" class="size-input" id="inputY" value="150" min="0">
+
+        <div class="panel-section">
+            <div class="section-title">⚡ Быстрые пресеты</div>
+            <div class="preset-buttons">
+                <button class="preset-btn" onclick="setPreset(100, 100, 400, 300)">400×300</button>
+                <button class="preset-btn" onclick="setPreset(150, 100, 300, 400)">300×400</button>
+                <button class="preset-btn" onclick="setPreset(200, 150, 500, 200)">500×200</button>
+                <button class="preset-btn" onclick="setPreset(100, 200, 200, 500)">200×500</button>
+                <button class="preset-btn" onclick="setPreset(250, 100, 600, 400)">600×400</button>
+                <button class="preset-btn" onclick="setPreset(100, 250, 800, 300)">800×300</button>
             </div>
         </div>
-        <div class="info-item">
-            <span class="info-label">Ширина:</span>
-            <span class="info-value" id="width">300</span>
-            <div class="input-control">
-                <input type="number" class="size-input" id="inputWidth" value="300" min="50">
-                <button class="apply-btn" onclick="applySize()">Применить</button>
+
+        <div class="panel-section">
+            <div class="section-title">📊 Текущие значения</div>
+            <div class="input-group">
+                <span class="input-label">X:</span>
+                <span class="size-input" style="background: #f8f9fa; border: none;" id="currentX">200</span>
+                <span class="unit">px</span>
             </div>
-        </div>
-        <div class="info-item">
-            <span class="info-label">Высота:</span>
-            <span class="info-value" id="height">200</span>
-            <div class="input-control">
-                <input type="number" class="size-input" id="inputHeight" value="200" min="50">
+            <div class="input-group">
+                <span class="input-label">Y:</span>
+                <span class="size-input" style="background: #f8f9fa; border: none;" id="currentY">150</span>
+                <span class="unit">px</span>
+            </div>
+            <div class="input-group">
+                <span class="input-label">Ширина:</span>
+                <span class="size-input" style="background: #f8f9fa; border: none;" id="currentWidth">300</span>
+                <span class="unit">px</span>
+            </div>
+            <div class="input-group">
+                <span class="input-label">Высота:</span>
+                <span class="size-input" style="background: #f8f9fa; border: none;" id="currentHeight">200</span>
+                <span class="unit">px</span>
             </div>
         </div>
     </div>
 
     <div class="controls-panel">
-        <div class="controls-title">Управление стрелками</div>
+        <div class="controls-title">⌨️ Управление</div>
         <div class="keyboard-controls">
             <div></div>
             <div class="key arrow">↑</div>
@@ -286,17 +423,21 @@
             <input type="number" class="step-input" id="stepSize" value="10" min="1" max="100">
             <span style="font-size: 12px;">px</span>
         </div>
-        <div style="font-size: 11px; color: #666; text-align: center; margin-top: 10px;">
-            Выделите прямоугольник и используйте стрелки
+        <div style="font-size: 11px; color: #666; text-align: center;">
+            Выделите прямоугольник для управления стрелками
         </div>
     </div>
 
+    <div class="coordinates-display" id="coordinates">
+        X: 200px, Y: 150px, Ш: 300px, В: 200px
+    </div>
+
     <div class="instructions">
-        🖱️ Перетаскивайте мышью • 🔄 Изменяйте размер за углы • ⌨️ Управляйте стрелками • 📝 Вводите размеры вручную
+        🖱️ Перетаскивайте • 🔄 Меняйте размер • 📝 Точный ввод • ⚡ Быстрые пресеты • ⌨️ Стрелки
     </div>
 
     <script>
-        class DraggableRectangle {
+        class PreciseRectangle {
             constructor() {
                 this.workspace = document.getElementById('workspace');
                 this.rectangle = null;
@@ -311,20 +452,17 @@
                 
                 this.createRectangle();
                 this.bindEvents();
-                this.updateInfo();
+                this.updateAllDisplays();
                 this.loadStepSize();
             }
 
             createRectangle() {
                 this.rectangle = document.createElement('div');
                 this.rectangle.className = 'rectangle';
-                this.rectangle.tabIndex = 0; // Делаем фокусируемым для клавиатуры
+                this.rectangle.tabIndex = 0;
                 
                 // Начальные размеры и позиция
-                this.rectangle.style.width = '300px';
-                this.rectangle.style.height = '200px';
-                this.rectangle.style.left = '200px';
-                this.rectangle.style.top = '150px';
+                this.setRectangle(200, 150, 300, 200);
 
                 // Создаем ручки для изменения размера
                 const resizeHandles = [
@@ -342,6 +480,19 @@
                 });
 
                 this.workspace.appendChild(this.rectangle);
+            }
+
+            setRectangle(x, y, width, height) {
+                const maxX = this.workspace.offsetWidth - width;
+                const maxY = this.workspace.offsetHeight - height;
+                const minSize = 50;
+
+                this.rectangle.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
+                this.rectangle.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
+                this.rectangle.style.width = Math.max(minSize, Math.min(width, this.workspace.offsetWidth)) + 'px';
+                this.rectangle.style.height = Math.max(minSize, Math.min(height, this.workspace.offsetHeight)) + 'px';
+                
+                this.updateAllDisplays();
             }
 
             bindEvents() {
@@ -374,7 +525,16 @@
                     localStorage.setItem('stepSize', this.stepSize);
                 });
 
-                // Предотвращаем выделение текста при перетаскивании
+                // Авто-применение при нажатии Enter в полях ввода
+                const inputs = ['inputX', 'inputY', 'inputWidth', 'inputHeight'];
+                inputs.forEach(id => {
+                    document.getElementById(id).addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            applyAll();
+                        }
+                    });
+                });
+
                 document.addEventListener('selectstart', (e) => {
                     if (this.isDragging || this.isResizing) {
                         e.preventDefault();
@@ -384,13 +544,13 @@
 
             select() {
                 this.isSelected = true;
+                this.rectangle.classList.add('selected');
                 this.rectangle.focus();
-                this.rectangle.style.boxShadow = '0 4px 20px rgba(255, 107, 107, 0.6)';
             }
 
             deselect() {
                 this.isSelected = false;
-                this.rectangle.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.2)';
+                this.rectangle.classList.remove('selected');
             }
 
             startDrag(e) {
@@ -413,7 +573,6 @@
                     const newX = e.clientX - this.startX;
                     const newY = e.clientY - this.startY;
 
-                    // Ограничиваем перемещение в пределах рабочей области
                     const maxX = this.workspace.offsetWidth - this.rectangle.offsetWidth;
                     const maxY = this.workspace.offsetHeight - this.rectangle.offsetHeight;
 
@@ -423,14 +582,14 @@
                     this.handleResize(e);
                 }
 
-                this.updateInfo();
+                this.updateAllDisplays();
             }
 
             stopDrag() {
                 this.isDragging = false;
                 this.isResizing = false;
                 this.rectangle.classList.remove('moving');
-                this.updateInfo();
+                this.updateAllDisplays();
             }
 
             startResize(e, direction) {
@@ -459,7 +618,6 @@
                 let newLeft = this.initialRect.left;
                 let newTop = this.initialRect.top;
 
-                // Минимальные размеры
                 const minSize = 50;
 
                 switch (this.resizeDirection) {
@@ -485,7 +643,6 @@
                         break;
                 }
 
-                // Ограничиваем размеры в пределах рабочей области
                 const maxWidth = this.workspace.offsetWidth - newLeft;
                 const maxHeight = this.workspace.offsetHeight - newTop;
 
@@ -533,44 +690,34 @@
 
                 this.rectangle.style.left = newX + 'px';
                 this.rectangle.style.top = newY + 'px';
-                this.updateInfo();
+                this.updateAllDisplays();
             }
 
-            updateInfo() {
+            updateAllDisplays() {
                 const x = this.rectangle.offsetLeft;
                 const y = this.rectangle.offsetTop;
                 const width = this.rectangle.offsetWidth;
                 const height = this.rectangle.offsetHeight;
 
-                document.getElementById('posX').textContent = x;
-                document.getElementById('posY').textContent = y;
-                document.getElementById('width').textContent = width;
-                document.getElementById('height').textContent = height;
-
-                // Обновляем значения в полях ввода
+                // Обновляем поля ввода
                 document.getElementById('inputX').value = x;
                 document.getElementById('inputY').value = y;
                 document.getElementById('inputWidth').value = width;
                 document.getElementById('inputHeight').value = height;
+
+                // Обновляем текущие значения
+                document.getElementById('currentX').textContent = x;
+                document.getElementById('currentY').textContent = y;
+                document.getElementById('currentWidth').textContent = width;
+                document.getElementById('currentHeight').textContent = height;
+
+                // Обновляем координаты внизу
+                document.getElementById('coordinates').textContent = 
+                    `X: ${x}px, Y: ${y}px, Ш: ${width}px, В: ${height}px`;
             }
 
-            applyManualPosition(x, y) {
-                const maxX = this.workspace.offsetWidth - this.rectangle.offsetWidth;
-                const maxY = this.workspace.offsetHeight - this.rectangle.offsetHeight;
-
-                this.rectangle.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
-                this.rectangle.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
-                this.updateInfo();
-            }
-
-            applyManualSize(width, height) {
-                const minSize = 50;
-                const maxWidth = this.workspace.offsetWidth - this.rectangle.offsetLeft;
-                const maxHeight = this.workspace.offsetHeight - this.rectangle.offsetTop;
-
-                this.rectangle.style.width = Math.max(minSize, Math.min(width, maxWidth)) + 'px';
-                this.rectangle.style.height = Math.max(minSize, Math.min(height, maxHeight)) + 'px';
-                this.updateInfo();
+            applyManualValues(x, y, width, height) {
+                this.setRectangle(x, y, width, height);
             }
 
             loadStepSize() {
@@ -582,26 +729,41 @@
             }
         }
 
-        // Глобальные функции для кнопок
+        // Глобальные функции
         let rectangle;
 
         function applyPosition() {
             const x = parseInt(document.getElementById('inputX').value) || 0;
             const y = parseInt(document.getElementById('inputY').value) || 0;
-            rectangle.applyManualPosition(x, y);
+            const width = rectangle.rectangle.offsetWidth;
+            const height = rectangle.rectangle.offsetHeight;
+            rectangle.applyManualValues(x, y, width, height);
         }
 
         function applySize() {
+            const x = rectangle.rectangle.offsetLeft;
+            const y = rectangle.rectangle.offsetTop;
             const width = parseInt(document.getElementById('inputWidth').value) || 50;
             const height = parseInt(document.getElementById('inputHeight').value) || 50;
-            rectangle.applyManualSize(width, height);
+            rectangle.applyManualValues(x, y, width, height);
         }
 
-        // Инициализация когда страница загрузится
+        function applyAll() {
+            const x = parseInt(document.getElementById('inputX').value) || 0;
+            const y = parseInt(document.getElementById('inputY').value) || 0;
+            const width = parseInt(document.getElementById('inputWidth').value) || 50;
+            const height = parseInt(document.getElementById('inputHeight').value) || 50;
+            rectangle.applyManualValues(x, y, width, height);
+        }
+
+        function setPreset(x, y, width, height) {
+            rectangle.applyManualValues(x, y, width, height);
+        }
+
+        // Инициализация
         document.addEventListener('DOMContentLoaded', () => {
-            rectangle = new DraggableRectangle();
+            rectangle = new PreciseRectangle();
             
-            // Клик вне прямоугольника снимает выделение
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.rectangle') && !e.target.closest('.info-panel') && !e.target.closest('.controls-panel')) {
                     rectangle.deselect();
@@ -611,3 +773,4 @@
     </script>
 </body>
 </html>
+
