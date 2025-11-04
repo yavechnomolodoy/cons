@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 Интерактивный прямоугольник</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .workspace {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: white;
+            border: 2px solid #333;
+            cursor: default;
+        }
+
+        .rectangle {
+            position: absolute;
+            background: rgba(255, 107, 107, 0.7);
+            border: 3px solid #ff6b6b;
+            border-radius: 8px;
+            cursor: move;
+            user-select: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .rectangle:hover {
+            background: rgba(255, 107, 107, 0.8);
+        }
+
+        .rectangle.moving {
+            cursor: grabbing;
+            opacity: 0.9;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #333;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .resize-handle.top-left {
+            top: -6px;
+            left: -6px;
+            cursor: nw-resize;
+        }
+
+        .resize-handle.top-right {
+            top: -6px;
+            right: -6px;
+            cursor: ne-resize;
+        }
+
+        .resize-handle.bottom-left {
+            bottom: -6px;
+            left: -6px;
+            cursor: sw-resize;
+        }
+
+        .resize-handle.bottom-right {
+            bottom: -6px;
+            right: -6px;
+            cursor: se-resize;
+        }
+
+        .info-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            font-size: 14px;
+            z-index: 1000;
+            min-width: 200px;
+        }
+
+        .info-item {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .info-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .coordinates {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="workspace" id="workspace">
+        <!-- Прямоугольник будет создан здесь -->
+    </div>
+
+    <div class="info-panel">
+        <div class="info-item">
+            <span class="info-label">Позиция X:</span>
+            <span class="info-value" id="posX">200px</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Позиция Y:</span>
+            <span class="info-value" id="posY">150px</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Ширина:</span>
+            <span class="info-value" id="width">300px</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">Высота:</span>
+            <span class="info-value" id="height">200px</span>
+        </div>
+    </div>
+
+    <div class="instructions">
+        🖱️ Перетаскивайте прямоугольник мышью • 🔄 Изменяйте размер за углы • 📏 Координаты обновляются в реальном времени
+    </div>
+
+    <script>
+        class DraggableRectangle {
+            constructor() {
+                this.workspace = document.getElementById('workspace');
+                this.rectangle = null;
+                this.isDragging = false;
+                this.isResizing = false;
+                this.resizeDirection = null;
+                this.startX = 0;
+                this.startY = 0;
+                this.initialRect = {};
+                
+                this.createRectangle();
+                this.bindEvents();
+                this.updateInfo();
+            }
+
+            createRectangle() {
+                this.rectangle = document.createElement('div');
+                this.rectangle.className = 'rectangle';
+                
+                // Начальные размеры и позиция
+                this.rectangle.style.width = '300px';
+                this.rectangle.style.height = '200px';
+                this.rectangle.style.left = '200px';
+                this.rectangle.style.top = '150px';
+
+                // Создаем ручки для изменения размера
+                const resizeHandles = [
+                    { position: 'top-left', cursor: 'nw-resize' },
+                    { position: 'top-right', cursor: 'ne-resize' },
+                    { position: 'bottom-left', cursor: 'sw-resize' },
+                    { position: 'bottom-right', cursor: 'se-resize' }
+                ];
+
+                resizeHandles.forEach(handle => {
+                    const handleEl = document.createElement('div');
+                    handleEl.className = `resize-handle ${handle.position}`;
+                    handleEl.style.cursor = handle.cursor;
+                    this.rectangle.appendChild(handleEl);
+                });
+
+                this.workspace.appendChild(this.rectangle);
+            }
+
+            bindEvents() {
+                // События для перемещения
+                this.rectangle.addEventListener('mousedown', this.startDrag.bind(this));
+                document.addEventListener('mousemove', this.onDrag.bind(this));
+                document.addEventListener('mouseup', this.stopDrag.bind(this));
+
+                // События для изменения размера
+                const handles = this.rectangle.querySelectorAll('.resize-handle');
+                handles.forEach(handle => {
+                    handle.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                        this.startResize(e, handle.classList[1]);
+                    });
+                });
+
+                // Предотвращаем выделение текста при перетаскивании
+                document.addEventListener('selectstart', (e) => {
+                    if (this.isDragging || this.isResizing) {
+                        e.preventDefault();
+                    }
+                });
+            }
+
+            startDrag(e) {
+                if (e.target.classList.contains('resize-handle')) return;
+                
+                this.isDragging = true;
+                this.rectangle.classList.add('moving');
+                
+                this.startX = e.clientX - this.rectangle.offsetLeft;
+                this.startY = e.clientY - this.rectangle.offsetTop;
+                
+                e.preventDefault();
+            }
+
+            onDrag(e) {
+                if (!this.isDragging && !this.isResizing) return;
+
+                if (this.isDragging) {
+                    const newX = e.clientX - this.startX;
+                    const newY = e.clientY - this.startY;
+
+                    // Ограничиваем перемещение в пределах рабочей области
+                    const maxX = this.workspace.offsetWidth - this.rectangle.offsetWidth;
+                    const maxY = this.workspace.offsetHeight - this.rectangle.offsetHeight;
+
+                    this.rectangle.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
+                    this.rectangle.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+                } else if (this.isResizing) {
+                    this.handleResize(e);
+                }
+
+                this.updateInfo();
+            }
+
+            stopDrag() {
+                this.isDragging = false;
+                this.isResizing = false;
+                this.rectangle.classList.remove('moving');
+                this.updateInfo();
+            }
+
+            startResize(e, direction) {
+                this.isResizing = true;
+                this.resizeDirection = direction;
+                
+                this.initialRect = {
+                    width: this.rectangle.offsetWidth,
+                    height: this.rectangle.offsetHeight,
+                    left: this.rectangle.offsetLeft,
+                    top: this.rectangle.offsetTop,
+                    mouseX: e.clientX,
+                    mouseY: e.clientY
+                };
+
+                e.preventDefault();
+            }
+
+            handleResize(e) {
+                const deltaX = e.clientX - this.initialRect.mouseX;
+                const deltaY = e.clientY - this.initialRect.mouseY;
+                
+                let newWidth = this.initialRect.width;
+                let newHeight = this.initialRect.height;
+                let newLeft = this.initialRect.left;
+                let newTop = this.initialRect.top;
+
+                // Минимальные размеры
+                const minSize = 50;
+
+                switch (this.resizeDirection) {
+                    case 'top-left':
+                        newWidth = Math.max(minSize, this.initialRect.width - deltaX);
+                        newHeight = Math.max(minSize, this.initialRect.height - deltaY);
+                        newLeft = this.initialRect.left + (this.initialRect.width - newWidth);
+                        newTop = this.initialRect.top + (this.initialRect.height - newHeight);
+                        break;
+                    case 'top-right':
+                        newWidth = Math.max(minSize, this.initialRect.width + deltaX);
+                        newHeight = Math.max(minSize, this.initialRect.height - deltaY);
+                        newTop = this.initialRect.top + (this.initialRect.height - newHeight);
+                        break;
+                    case 'bottom-left':
+                        newWidth = Math.max(minSize, this.initialRect.width - deltaX);
+                        newHeight = Math.max(minSize, this.initialRect.height + deltaY);
+                        newLeft = this.initialRect.left + (this.initialRect.width - newWidth);
+                        break;
+                    case 'bottom-right':
+                        newWidth = Math.max(minSize, this.initialRect.width + deltaX);
+                        newHeight = Math.max(minSize, this.initialRect.height + deltaY);
+                        break;
+                }
+
+                // Ограничиваем размеры в пределах рабочей области
+                const maxWidth = this.workspace.offsetWidth - newLeft;
+                const maxHeight = this.workspace.offsetHeight - newTop;
+
+                newWidth = Math.min(newWidth, maxWidth);
+                newHeight = Math.min(newHeight, maxHeight);
+
+                this.rectangle.style.width = newWidth + 'px';
+                this.rectangle.style.height = newHeight + 'px';
+                this.rectangle.style.left = newLeft + 'px';
+                this.rectangle.style.top = newTop + 'px';
+            }
+
+            updateInfo() {
+                document.getElementById('posX').textContent = this.rectangle.offsetLeft + 'px';
+                document.getElementById('posY').textContent = this.rectangle.offsetTop + 'px';
+                document.getElementById('width').textContent = this.rectangle.offsetWidth + 'px';
+                document.getElementById('height').textContent = this.rectangle.offsetHeight + 'px';
+            }
+        }
+
+        // Инициализация когда страница загрузится
+        document.addEventListener('DOMContentLoaded', () => {
+            new DraggableRectangle();
+        });
+    </script>
+</body>
+</html>
