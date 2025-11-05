@@ -64,6 +64,18 @@
             border: 1px solid #ddd;
         }
 
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
         .resize-handle {
             position: absolute;
             width: 8px;
@@ -118,7 +130,7 @@
     </div>
 
     <div class="instructions">
-        🖱️ Перетаскивайте мышью • 🔄 Изменяйте размер за углы • 📐 Привязка к сетке 10px
+        🖱️ Перетаскивайте мышью • 🔄 Изменяйте размер за углы • 📐 Привязка к сетке 10px • 📍 Координаты центра
     </div>
 
     <script>
@@ -136,6 +148,13 @@
             // Функция привязки к сетке
             snapToGrid(value) {
                 return Math.round(value / this.gridSize) * this.gridSize;
+            }
+
+            // Функция для вычисления центра прямоугольника
+            getRectangleCenter(rect) {
+                const x = rect.offsetLeft + rect.offsetWidth / 2;
+                const y = rect.offsetTop + rect.offsetHeight / 2;
+                return { x, y };
             }
 
             createRectangles() {
@@ -166,6 +185,11 @@
                 const info = document.createElement('div');
                 info.className = 'info-display';
                 rect.appendChild(info);
+
+                // Создаем точку в центре
+                const centerDot = document.createElement('div');
+                centerDot.className = 'center-dot';
+                rect.appendChild(centerDot);
 
                 // Создаем ручки для изменения размера
                 const resizeHandles = [
@@ -350,16 +374,15 @@
 
             updateInfo(rect) {
                 const info = rect.querySelector('.info-display');
-                const x = rect.offsetLeft;
-                const y = rect.offsetTop;
+                const center = this.getRectangleCenter(rect);
                 const width = rect.offsetWidth;
                 const height = rect.offsetHeight;
 
                 info.innerHTML = `
-                    X: ${x}px<br>
-                    Y: ${y}px<br>
-                    Ш: ${width}px<br>
-                    В: ${height}px<br>
+                    Центр X: ${Math.round(center.x)}px<br>
+                    Центр Y: ${Math.round(center.y)}px<br>
+                    Ширина: ${width}px<br>
+                    Высота: ${height}px<br>
                     <small>📐 Сетка 10px</small>
                 `;
             }
